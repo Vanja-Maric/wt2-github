@@ -1,0 +1,24 @@
+# Use the official .NET runtime image for .NET 8.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 5000
+
+# Use the official .NET SDK image for building the app
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+COPY assignment-wt2.generated.sln .
+COPY assignment-wt2.csproj ./
+
+RUN dotnet restore "assignment-wt2.generated.sln"
+
+COPY . .
+
+RUN dotnet publish "assignment-wt2.csproj" -c Release -o /app/publish --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+
+# Wait 20 seconds before starting the app
+CMD ["sh", "-c", "sleep 50 && dotnet assignment-wt2.dll"]
