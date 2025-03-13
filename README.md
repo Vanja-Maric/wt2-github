@@ -27,3 +27,23 @@ Explain how you have addressed the assignment requirements. If you've added any 
 ## Acknowledgements
 
 Include a list of resources you found helpful, attributions, or shoutouts here.
+
+## Run app in docker: 
+- docker-compose up -d  
+## Fix cors at Kibana (IF you are using kibana):
+- docker exec -u 0 -it kibana bash
+- apt-get update
+- apt-get install nano
+- cd usr/share/kibana/config
+- nano kibana.yml
+- add this lines to the file:
+server.cors.enabled: true
+server.cors.allowOrigin: ["*"]
+- docker-compose restart
+
+
+### At server start docker compose up and down 2 times to sync elastic and dontnet
+
+ne radi trenutno udjes na remote server  (sa 103 nesto zavrsava) i ne mogu iz forntenda da dodem do elastica  
+
+expozala sam sad elastic ali nece ove kasnije da dohvati sto su /airbnb-... poslije elastic. Vidi moze li se u nginx staviti expozanje nesto kao /elastic*

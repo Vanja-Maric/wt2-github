@@ -21,4 +21,4 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 # Wait 20 seconds before starting the app
-CMD ["sh", "-c", "sleep 50 && dotnet assignment-wt2.dll"]
+CMD ["sh", "-c", "sleep 30 && dotnet assignment-wt2.dll"]

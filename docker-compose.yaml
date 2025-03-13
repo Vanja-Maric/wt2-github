@@ -1,25 +1,17 @@
 services:
   elasticsearch:
-    image: elasticsearch:7.9.2
+    image: elasticsearch:8.0.0
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - xpack.security.enabled=false
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - http.cors.allow-methods=OPTIONS,HEAD,GET,POST,PUT,DELETE
+      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length
     ports:
       - "9200:9200"
-    networks:
-      - elk-network
-
-  kibana:
-    image: kibana:7.9.2
-    container_name: kibana
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-    ports:
-      - "5601:5601"
-    depends_on:
-      - elasticsearch
     networks:
       - elk-network
 
@@ -39,6 +31,19 @@ services:
     volumes:
       - ./src:/app/src  
 
+  frontend:
+    build:
+      context: ./wt2-frontend 
+      dockerfile: Dockerfile  
+    container_name: frontend
+    depends_on:
+      - dotnet-app  
+    networks:
+      - elk-network
+    ports:
+      - "8080:80" 
+
 networks:
   elk-network:
     driver: bridge
+    
