@@ -55,17 +55,6 @@ export function NavBar() {
                   Home
                 </NavLink>
               </li>
-              <li className="nav-item">
-                <NavLink
-                  className={({ isActive }) =>
-                    `nav-link fs-5 ${isActive ? 'active' : ''}`
-                  }
-                  to="/statistics"
-                  onClick={handleChecked}
-                >
-                  Statistics
-                </NavLink>
-              </li>
             </ul>
           </div>
         </div>

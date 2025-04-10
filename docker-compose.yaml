@@ -1,49 +1,54 @@
 services:
-  elasticsearch:
-    image: elasticsearch:8.0.0
-    container_name: elasticsearch
+  # Database service
+  database:
+    image: postgres:15
+    container_name: postgres-db
+    env_file:
+      - .env 
     environment:
-      - discovery.type=single-node
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - xpack.security.enabled=false
-      - http.cors.enabled=true
-      - http.cors.allow-origin=*
-      - http.cors.allow-methods=OPTIONS,HEAD,GET,POST,PUT,DELETE
-      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "9200:9200"
+      - "5432:5432"
     networks:
-      - elk-network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
+  # Backend service (Dotnet app)
   dotnet-app:
     build:
       context: .
       dockerfile: Dockerfile.production
     container_name: dotnet-app
     environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     depends_on:
-      - elasticsearch
-    networks:
-      - elk-network
+      database:
+        condition: service_healthy
     ports:
-      - "5000:5000"
-    volumes:
-      - ./src:/app/src  
+      - "8080:8080"
+    networks:
+      - app-network
 
+  # Frontend service (React app)
   frontend:
     build:
-      context: ./wt2-frontend 
-      dockerfile: Dockerfile  
-    container_name: frontend
-    depends_on:
-      - dotnet-app  
-    networks:
-      - elk-network
+      context: ./wt2-frontend
+      dockerfile: Dockerfile 
+    container_name: react-app
     ports:
-      - "8080:80" 
+      - "3000:80"
+    networks:
+      - app-network
 
 networks:
-  elk-network:
+  app-network:
     driver: bridge
-    

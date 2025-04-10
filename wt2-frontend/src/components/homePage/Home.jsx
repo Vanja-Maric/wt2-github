@@ -4,7 +4,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import AirbnbPriceDistribution from './charts/AirbnbPriceDistibution.jsx';
 import AirbnbPriceByNeighborhood from './charts/AirbnbPriceByNeighborhood.jsx';
 import AirbnbRoomTypeComparison from './charts/AirbnbRoomTypeComparation.jsx';
-import AirbnbPriceVsReviews from './charts/AirbnbPriceVsReviews.jsx';
 import AirbnbRoomTypeDistribution from './charts/AirbnbRoomTypeDistribution.jsx';
 
 export function Home() {
@@ -13,52 +12,41 @@ export function Home() {
   const [neighborhoods, setNeighborhoods] = useState([]);
 
   useEffect(() => {
-    // Function to fetch neighborhoods from Elasticsearch
-  const fetchNeighborhoods = async (from = 0) => {
-    try {
-      const query = {
-        from: from,
-        size: 1000,
-        _source: ['neighbourhood_group'],
-        query: {
-          match_all: {},
-        },
-      };
-
-      const response = await fetch('http://localhost:9200/air_bnb_new_york_city/_search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(query),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.hits && data.hits.hits.length > 0) {
-        const neighborhoods = data.hits.hits.map(hit => hit._source.neighbourhood_group);
-        setNeighborhoods(prevneighborhoods => [...prevneighborhoods, ...neighborhoods]);
-        // all neighborhoods unique
-        setNeighborhoods(setNeighborhoods => [...new Set(setNeighborhoods)]);
-
-        if (data.hits.hits.length === 1000) {
-          fetchNeighborhoods(from + 1000);
-        } else {
-          const neighborhoodData = processDataForChart([...allneighborhoods, ...neighborhoods]);
-          setNeighborhoods(neighborhoods); 
+    const fetchNeighborhoods = async (from = 0) => {
+      try {
+        const response = await fetch(`http://localhost:8080/api/airbnb/neighborhoods`);
+    
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      } else {
-        console.error('No hits found in the response.');
-        setNeighborhoods(null);
+    
+        const neighborhoods = await response.json();
+    
+        if (neighborhoods.length > 0) {
+          setNeighborhoods(prevNeighborhoods => [
+            ...prevNeighborhoods,
+            ...neighborhoods
+          ]);
+
+          setNeighborhoods(prevNeighborhoods => [
+            ...new Set(prevNeighborhoods)
+          ]);
+    
+         if (neighborhoods.length === 1000) {
+            fetchNeighborhoods(from + 1000);
+          } else {
+            
+            const neighborhoodData = processDataForChart(neighborhoods);
+            setNeighborhoods(neighborhoodData);
+          }
+        } else {
+          console.error('No neighborhoods found in the response.');
+          setNeighborhoods(null);
+        }
+      } catch (error) {
+        console.error('Error fetching neighborhoods:', error);
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    }
-  }
+    };
     fetchNeighborhoods();
   }, []);
 
@@ -95,7 +83,6 @@ export function Home() {
                   <option value="Entire home/apt">Entire home/apt</option>
                   <option value="Private room">Private room</option>
                   <option value="Shared room">Shared room</option>
-                  <option value="Hotel room">Hotel room</option>
                 </select>
               </label>
             </div>
@@ -127,12 +114,7 @@ export function Home() {
       <div className="row mt-5">
         {/* Price vs Reviews Chart */}
         <div className="col-md-6">
-          <AirbnbPriceVsReviews/>
-        </div>
-
-        {/* Room Type Distribution Chart */}
-        <div className="col-md-6">
-          <AirbnbRoomTypeDistribution/>
+        <AirbnbRoomTypeDistribution/>
         </div>
       </div>
     </div>

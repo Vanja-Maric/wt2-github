@@ -1,65 +1,104 @@
-﻿using assignment_wt2;
-using Elasticsearch.Net;
+﻿using assignment_wt2.src.data;
 using Microsoft.Extensions.DependencyInjection;
-using Nest;
-using Polly; 
+using Polly;
+using Npgsql;
+using assignment_wt2;
 
-DotNetEnv.Env.Load();
-var connectionSettings = new ConnectionSettings(new Uri("http://elasticsearch:9200")) //TODO: Make it possible to use localhost in development
-    .DisableDirectStreaming()
-    .BasicAuthentication("elastic", Environment.GetEnvironmentVariable("ELASTIC_PASSWORD"))
-    .ServerCertificateValidationCallback(CertificateValidations.AllowAll);
+var builder = WebApplication.CreateBuilder(args);
 
-var retryPolicy = Polly.Policy
-    .Handle<Exception>() 
-    .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(Math.Pow(10, retryAttempt)));
+// Register services
+builder.Services.AddControllers();
 
-
-var elasticClient = await retryPolicy.ExecuteAsync(async () =>
+// Register CORS
+builder.Services.AddCors(options =>
 {
-    var client = new ElasticClient(connectionSettings);
-    if (client.Ping().IsValid)
+    options.AddPolicy("AllowSpecificOrigin", builder =>
     {
-        Console.WriteLine("Successfully connected to Elasticsearch.");
-        return client;
+        builder.WithOrigins("http://localhost:3000")  // Replace with frontend URL
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
+
+builder.Services.AddSingleton<DatabaseService>();
+
+var app = builder.Build();
+
+// Enable CORS
+app.UseCors("AllowSpecificOrigin");
+
+app.UseRouting();
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllers();
+});
+
+// Run async startup logic before starting the app
+await InitializeAsync(app.Services);
+
+// Start the web application
+app.Run();
+
+
+// 👇 Async initialization logic
+static async Task InitializeAsync(IServiceProvider services)
+{
+    Console.WriteLine("Application starting...");
+
+    // Load environment variables from .env file
+    DotNetEnv.Env.Load();
+
+    using var scope = services.CreateScope();
+    var provider = scope.ServiceProvider;
+    var databaseService = provider.GetRequiredService<DatabaseService>();
+
+    var retryPolicy = Policy
+        .Handle<Exception>()
+        .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+
+    var dbUser = Environment.GetEnvironmentVariable("POSTGRES_USER");
+    var dbDatabase = Environment.GetEnvironmentVariable("POSTGRES_DB");
+    var dbPassword = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
+    var connectionString = $"Host=database;Database={dbDatabase};User Id={dbUser};Password={dbPassword};";
+    Console.WriteLine($"Connection string: {connectionString}");
+
+   await retryPolicy.ExecuteAsync(async () =>
+{
+    try
+    {
+        Console.WriteLine("Trying DB connection...");
+        
+        using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        
+        Console.WriteLine("Connected to the database.");
     }
-    else
+    catch (Exception ex)
     {
-        Console.WriteLine("Failed to connect to Elasticsearch.");
-        throw new Exception("Connection to Elasticsearch failed.");
+        Console.WriteLine($"Error connecting to the database: {ex.Message}");
+        // You can also log the full exception details for more insight
+        Console.WriteLine($"Exception details: {ex.ToString()}");
     }
 });
 
 
-// Dependency Injection setup
-var serviceProvider = new ServiceCollection()
-    .AddSingleton<AddToElastic>()
-    .AddSingleton<IElasticClient>(elasticClient)
-    .BuildServiceProvider();
+    var dataLoader = new DataLoader("src/NewYork.json");
+    List<Data> dataList = await dataLoader.LoadDataAsync();
 
-var addToElastic = serviceProvider.GetService<AddToElastic>();
-
-var indexSetup = new ElasticIndexSetup(elasticClient);
-await indexSetup.CreateIndexAsync();
-
-
-var dataLoader = new DataLoader("src/NewYork.json");
-
-List<Data> dataList = await dataLoader.LoadDataAsync();
-
-if (dataList != null && dataList.Any())
-{
-    Console.WriteLine("Data loaded successfully. Printing first few records:");
-
-    // Print first 5 records or the full list if there are less than 5
-    var recordsToDisplay = dataList.Take(5);
-    foreach (var record in recordsToDisplay)
+    if (dataList.Any())
     {
-        Console.WriteLine($"ID: {record.id}, Price: {record.price}, Availability: {record.availability_365}, Timestamp: {record.timestamp}");
+        var recordsToDisplay = dataList.Take(5);
+        foreach (var record in recordsToDisplay)
+        {
+            Console.WriteLine($"ID: {record.id}, Price: {record.price}, Timestamp: {record.timestamp}");
+        }
+
+        await databaseService.EnsureTableExistsAsync();
+        await databaseService.AddDataAsync(dataList);
+        Console.WriteLine("Data successfully added to the database.");
+    }
+    else
+    {
+        Console.WriteLine("No data loaded.");
     }
 }
-else
-{
-    Console.WriteLine("No data loaded or data is empty.");
-}
-await addToElastic.AddData(dataList);

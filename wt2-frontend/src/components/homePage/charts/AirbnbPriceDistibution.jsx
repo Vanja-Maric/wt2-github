@@ -5,72 +5,34 @@ import Chart from 'chart.js/auto';
 const AirbnbPriceDistribution = ({ neighborhood, roomType }) => {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [allPrices, setAllPrices] = useState([]);
-  console.log(neighborhood, roomType);
 
-  const fetchDataFromElasticsearch = async (from = 0) => {
+  const fetchDataFromApi = async () => {
     try {
-      const query = {
-        from: from,
-        size: 1000,
-        _source: ['price', 'neighbourhood_group', 'room_type'],
-        query: {
-          bool: {
-            must: [
-              { match: { neighbourhood_group: neighborhood } },
-              { match: { room_type: roomType } },
-            ],
-          },
-        },
-      };
-
-
-      const response = await fetch('http://localhost:9200/air_bnb_new_york_city/_search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(query),
-      });
-
+      const response = await fetch(
+        `http://localhost:8080/api/airbnb/price-distribution?neighborhood=${encodeURIComponent(neighborhood)}&roomType=${encodeURIComponent(roomType)}`
+      );
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      const data = await response.json();
-
-      if (data.hits && data.hits.hits.length > 0) {
-        const prices = data.hits.hits.map(hit => hit._source.price);
-        setAllPrices(prevPrices => [...prevPrices, ...prices]);
-
-        if (data.hits.hits.length === 1000) {
-          fetchDataFromElasticsearch(from + 1000);
-        } else {
-          const priceData = processDataForChart([...allPrices, ...prices]);
-          setChartData(priceData);
-          setLoading(false);
-        }
-      } else {
-        console.error('No hits found in the response.');
-        setChartData(null);
-        setLoading(false);
-      }
+  
+      const buckets = await response.json(); 
+  
+      const priceData = processDataForChart(buckets);
+      setChartData(priceData);
     } catch (error) {
       console.error('Error fetching data:', error);
+      setChartData(null);
+    } finally {
       setLoading(false);
     }
-  };
+  };  
 
-  const processDataForChart = (prices) => {
-    const buckets = groupPricesIntoBuckets(prices);
-
-    const labels = Object.keys(buckets);
-    const values = Object.values(buckets);
-
+  const processDataForChart = (buckets) => {
     return {
-      labels,
+      labels: Object.keys(buckets), 
       datasets: [{
-        data: values,
+        data: Object.values(buckets),  
         backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
       }],
     };
@@ -91,8 +53,7 @@ const AirbnbPriceDistribution = ({ neighborhood, roomType }) => {
   };
 
   useEffect(() => {
-    setAllPrices([]);
-    fetchDataFromElasticsearch();
+    fetchDataFromApi();
   }, [neighborhood, roomType]);
 
   return (
